@@ -1,8 +1,9 @@
 import csv
+
 import requests
 from seleniumwire import webdriver
 
-origin = "<website_should_be_here>"
+origin = "<here_should_be_a_site_name>"
 main_url = f"{origin}/catalog/"
 
 
@@ -22,12 +23,7 @@ def get_cookies():
     return tokens
 
 
-def request_jewelery_shop():
-    tokens = get_cookies()
-    csrf = tokens[0]
-    xsrf_token = str(tokens[1]).split(";")[0].split("=")[1]
-    poison_drop = str(tokens[1]).split(";")[1].split("=")[1]
-    session = requests.Session()
+def get_full_response(session, xsrf_token, poison_drop, csrf, offset):
     cookies = {
         'XSRF-TOKEN': xsrf_token,
         'poisondrop_session': poison_drop,
@@ -45,18 +41,25 @@ def request_jewelery_shop():
         'Referer': main_url,
     }
 
-    data = '{"url":"","limit":48,"offset":0,"parameters":{"section":""}}'
+    data = '{"url":"","limit":48,"offset":' + str(offset) + ',"parameters":{"section":""}}'
 
     response = session.post(f'{main_url}show', headers=headers, cookies=cookies, data=data)
-    full_response = response.json()
+    return response.json()
+
+
+def request_jewelery_shop():
+    tokens = get_cookies()
+    csrf = tokens[0]
+    xsrf_token = str(tokens[1]).split(";")[0].split("=")[1]
+    poison_drop = str(tokens[1]).split(";")[1].split("=")[1]
+    session = requests.Session()
+    full_response = get_full_response(session, xsrf_token, poison_drop, csrf, 0)
     quantity = full_response.get('result').get('quantity')
     with open('shop_data.csv', 'w', newline='') as csvfile:
         csv_writer = csv.writer(csvfile, delimiter=';', quoting=csv.QUOTE_MINIMAL)
         csv_writer.writerow(("Product url", "Designer", "Product name", "Price"))
-        for i in range(0, quantity, 48):
-            data = '{"url":"","limit":48,"offset":' + str(i) + ',"parameters":{"section":""}}'
-            response = session.post(f'{main_url}show', headers=headers, cookies=cookies, data=data)
-            full_response = response.json()
+        for offset in range(0, quantity, 48):
+            full_response = get_full_response(session, xsrf_token, poison_drop, csrf, offset)
             products = full_response.get('result').get('products')
             for product in products:
                 product_url = f'{main_url}{product.get("catalog").get("url")}/{product.get("url")}'
